@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>可转债数据看板</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 16px 0;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1rem;
+        }
+
+        #alert-box {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #e74c3c;
+            color: white;
+            padding: 14px 24px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
+            font-weight: 600;
+            font-size: 1.1rem;
+            animation: fadeInOut 3s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            90% { opacity: 1; }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        }
+
+        .panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .panel h3 {
+            margin: 0 0 12px 0;
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+
+        #checkbox-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .checkbox-item input {
+            margin-right: 4px;
+        }
+
+        .btn-group {
+            margin-top: 10px;
+        }
+
+        .btn {
+            font-size: 0.85rem;
+            padding: 4px 10px;
+            margin-right: 6px;
+            cursor: pointer;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn.uncheck {
+            background: #e74c3c;
+        }
+
+        .btn.uncheck:hover {
+            background: #c0392b;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        thead {
+            background: linear-gradient(to right, #3498db, #2c3e50);
+            color: white;
+        }
+
+        th {
+            padding: 14px 12px;
+            text-align: center;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: #f8f9fa !important;
+        }
+
+        /* 警报样式 */
+        tr.alert-low {
+            background-color: #e8f5e9 !important;
+            color: #2e7d32 !important;
+            font-weight: 600;
+        }
+
+        tr.alert-high {
+            background-color: #ffebee !important;
+            color: #c62828 !important;
+            font-weight: 600;
+        }
+
+        /* 可编辑单元格 */
+        .editable-qty {
+            outline: none;
+            border: 1px dashed #888;
+            border-radius: 4px;
+            cursor: text;
+            background-color: #fafafa;
+        }
+
+        .editable-qty:focus {
+            border-color: #3498db;
+            background-color: #fff;
+        }
+
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .loading i {
+            margin-right: 8px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        #last-updated {
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            h1 { font-size: 1.8rem; }
+            th, td { padding: 10px 6px; font-size: 0.85rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-chart-line"></i> 可转债实时监控看板</h1>
+            <p class="subtitle">转股溢价率阈值监控 · 自定义持仓 · 实时刷新</p>
+        </header>
+
+        <div id="alert-box">
+            <i class="fas fa-exclamation-triangle"></i> 发现达到阈值的可转债！
+        </div>
+
+        <!-- 显示控制面板 -->
+        <div class="panel" id="filter-panel">
+            <h3><i class="fas fa-filter"></i> 显示控制</h3>
+            <div id="checkbox-container">
+                <!-- 动态生成 -->
+            </div>
+            <div class="btn-group">
+                <button id="check-all" class="btn">✅ 全选</button>
+                <button id="uncheck-all" class="btn uncheck">❌ 全不选</button>
+            </div>
+            <div style="font-size: 0.85rem; color: #7f8c8d; margin-top: 8px;">
+                ✅ 勾选 → 显示；❌ 取消 → 隐藏
+            </div>
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="table-container">
+            <table id="data-table">
+                <thead>
+                    <tr>
+                        <th>股票名称</th>
+                        <th>转债代码</th>
+                        <th>股票代码</th>
+                        <th>债现价</th>
+                        <th>正股价</th>
+                        <th>转股价</th>
+                        <th>转股溢价率</th>
+                        <th>下限</th>
+                        <th>上限</th>
+                        <th>最佳成交量</th>
+                        <th>刷新时间</th>
+                        <!-- --- 修改点：添加建议成交时间表头 --- -->
+                        <th>建议成交时间</th>
+                        <th>股票数量</th>
+                        <th>债券数量</th>
+                    </tr>
+                </thead>
+                <tbody id="data-body">
+                    <!-- 初始状态无内容，等待数据加载 -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="last-updated">最后更新: --:--:--</div>
+    </div>
+
+    <script>
+        // === 全局状态与缓存 ===
+        const tbody = document.getElementById('data-body');
+        const checkboxContainer = document.getElementById('checkbox-container');
+        const lastUpdatedDiv = document.getElementById('last-updated');
+        const alertBox = document.getElementById('alert-box');
+
+        let originalTitle = document.title;
+        let alertInterval = null;
+        let isPageVisible = true;
+        const visibleRows = new Map(); // code -> boolean
+        const rowCache = new Map();    // code -> { row: HTMLElement, cells: [HTMLElement, ...] }
+        // let isEditing = false;         // 移除输入保护标志
+        const saveDebounceTimers = {}; // 防抖定时器缓存
+
+        // === 防抖保存函数 ===
+        function debouncedSave(code, value) {
+            clearTimeout(saveDebounceTimers[code]);
+            saveDebounceTimers[code] = setTimeout(() => {
+                if (value !== '') {
+                    localStorage.setItem(`qty_${code}`, value);
+                } else {
+                    localStorage.removeItem(`qty_${code}`);
+                }
+            }, 300); // 300ms 后执行保存
+        }
+
+        // === 输入处理函数 ===
+        function handleQtyInput(e) {
+            const cell = e.target;
+            const code = cell.dataset.code;
+            const qtyStr = cell.innerText.trim();
+            const qty = qtyStr ? parseFloat(qtyStr) : 0;
+
+            const cachedRow = rowCache.get(code);
+            if (!cachedRow) return;
+
+            const { cells } = cachedRow;
+            const priceCell = cells[5]; // 转股价列 (索引从0开始)
+            const faceCell = cells[13]; // 面值列 (索引+1，因为插入了建议成交时间)
+
+            const price = parseFloat(priceCell.textContent);
+            if (!isNaN(qty) && !isNaN(price)) {
+                const faceValue = (qty * price / 100).toFixed(2);
+                faceCell.textContent = faceValue;
+            }
+
+            // 防抖保存
+            debouncedSave(code, qtyStr);
+        }
+
+        function handleQtyBlur(e) {
+            const cell = e.target;
+            const code = cell.dataset.code;
+            const qtyStr = cell.innerText.trim();
+
+            if (qtyStr === '') {
+                localStorage.removeItem(`qty_${code}`);
+            } else {
+                const qty = parseFloat(qtyStr);
+                if (isNaN(qty)) {
+                    cell.innerText = '';
+                    localStorage.removeItem(`qty_${code}`);
+                } else {
+                    const cleanQtyStr = qty.toString();
+                    if (cell.innerText !== cleanQtyStr) {
+                        cell.innerText = cleanQtyStr;
+                    }
+                    localStorage.setItem(`qty_${code}`, cleanQtyStr);
+                }
+            }
+            // isEditing = false; // 移除输入保护
+        }
+
+        // function handleQtyFocus(e) {
+        //      isEditing = true; // 移除输入保护
+        // }
+
+        // === 初始化 ===
+        document.addEventListener('DOMContentLoaded', function () {
+            originalTitle = document.title;
+            fetchData();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            isPageVisible = !document.hidden;
+            if (isPageVisible) stopTitleBlinking();
+        });
+
+        // === 数据获取与更新流程 ===
+        // 行情刷新 (0.5秒一次，不再保护输入)
+        setInterval(() => {
+            // if (!isEditing) { // 移除保护条件
+                fetch('/api/data')
+                    .then(r => r.ok ? r.json() : Promise.reject('API Error'))
+                    .then(data => {
+                        if (!window.filterPanelBuilt && data?.length) {
+                            buildFilterPanel(data);
+                            window.filterPanelBuilt = true;
+                        }
+                        updateTableIncrementally(data);
+                        const now = new Date();
+                        lastUpdatedDiv.textContent = `最后更新: ${now.toTimeString().slice(0, 8)}`;
+                    })
+                    .catch(err => {
+                        console.warn('行情刷新失败:', err);
+                        // 可选：在tbody中显示错误信息
+                        // tbody.innerHTML = '<tr><td colspan="13" class="loading">数据加载失败</td></tr>';
+                        // 或者保持原状，不清空已有数据
+                    });
+            // }
+        }, 500); // 0.5秒刷新一次行情
+
+        // 警报刷新 (0.5秒一次，独立)
+        setInterval(() => {
+            fetch('/api/alerts')
+                .then(r => r.json())
+                .then(alerts => {
+                    const newCount = alerts.length;
+                    if (newCount > (window.lastAlertCount || 0)) {
+                        window.lastAlertCount = newCount;
+                        showAlert();
+                    }
+                })
+                .catch(err => console.warn('警报获取失败:', err));
+        }, 500); // 0.5秒刷新一次警报
+
+        // === 构建筛选面板 ===
+        function buildFilterPanel(data) {
+            const uniqueItems = Array.from(
+                new Map(data.map(item => [item.转债代码, item.股票名称])).entries()
+            );
+
+            uniqueItems.forEach(([code, short]) => visibleRows.set(code, true));
+
+            checkboxContainer.innerHTML = uniqueItems.map(([code, short]) => `
+                <label class="checkbox-item">
+                    <input type="checkbox" class="row-toggle" data-code="${code}" checked>
+                    <span>${short}</span>
+                </label>
+            `).join('');
+
+            checkboxContainer.addEventListener('change', e => {
+                if (e.target.classList.contains('row-toggle')) {
+                    const code = e.target.dataset.code;
+                    visibleRows.set(code, e.target.checked);
+                    updateTableIncrementally(window.latestDataArray || []);
+                }
+            });
+
+            document.getElementById('check-all').addEventListener('click', () => {
+                visibleRows.forEach((_, code) => visibleRows.set(code, true));
+                document.querySelectorAll('.row-toggle').forEach(el => el.checked = true);
+                updateTableIncrementally(window.latestDataArray || []);
+            });
+
+            document.getElementById('uncheck-all').addEventListener('click', () => {
+                visibleRows.forEach((_, code) => visibleRows.set(code, false));
+                document.querySelectorAll('.row-toggle').forEach(el => el.checked = false);
+                updateTableIncrementally(window.latestDataArray || []);
+            });
+        }
+
+        // === 核心：增量更新表格 ===
+        function updateTableIncrementally(newData) {
+            if (!newData || newData.length === 0) {
+                // 如果没有数据，清空tbody
+                tbody.innerHTML = '';
+                rowCache.clear(); // 清空缓存
+                return;
+            }
+            window.latestDataArray = newData; // 更新全局缓存
+
+            // 1. 标记当前存在的转债代码
+            const currentCodes = new Set(newData.map(item => item.转债代码));
+
+            // 2. 遍历现有缓存，移除已不存在的行
+            for (const [code, cached] of rowCache) {
+                if (!currentCodes.has(code)) {
+                    cached.row.remove();
+                    rowCache.delete(code);
+                }
+            }
+
+            // 3. 遍历新数据，更新或创建行
+            for (const item of newData) {
+                const code = item.转债代码;
+                const shouldShow = visibleRows.get(code);
+
+                if (!shouldShow) {
+                    // 如果当前行被隐藏，且存在于缓存中，先隐藏它
+                    if (rowCache.has(code)) {
+                        rowCache.get(code).row.style.display = 'none';
+                    }
+                    continue; // 跳过隐藏的行
+                }
+
+                let cachedRow = rowCache.get(code);
+
+                if (cachedRow) {
+                    // 行已存在，更新内容
+                    const { row, cells } = cachedRow;
+                    row.style.display = ''; // 确保行是显示的
+
+                    // 更新非用户输入列
+                    // --- 修改点：添加建议成交时间的更新逻辑，注意索引变化 ---
+                    const updates = [
+                        [0, item.股票名称],
+                        [1, item.转债代码],
+                        [2, item.股票代码],
+                        [3, Number(item.债现价).toFixed(2)],
+                        [4, Number(item.正股价).toFixed(2)],
+                        [5, Number(item.转股价).toFixed(2)], // 转股价变化时需要重算面值
+                        [6, item.转股溢价率_pct],
+                        [7, (item.下限 * 100).toFixed(2) + '%'],
+                        [8, (item.上限 * 100).toFixed(2) + '%'],
+                        [9, item.最佳成交量.toLocaleString()],
+                        [10, item.刷新时间],
+                        [11, item.建议成交时间] // 建议成交时间列
+                    ];
+
+                    for (const [idx, val] of updates) {
+                        if (cells[idx].textContent !== val) {
+                            cells[idx].textContent = val;
+                        }
+                    }
+
+                    // 重算面值 (依赖转股价和用户输入的股票数量)
+                    const qtyStr = cells[12].innerText.trim(); // 股票数量列 (索引+1)
+                    const qty = qtyStr ? parseFloat(qtyStr) : 0;
+                    if (!isNaN(qty)) {
+                        const newFaceValue = (qty * item.转股价 / 100).toFixed(2);
+                        if (cells[13].textContent !== newFaceValue) { // 面值列 (索引+1)
+                            cells[13].textContent = newFaceValue;
+                        }
+                    }
+
+                    // 更新警报样式
+                    row.classList.toggle('alert-low', item.低于下限 === '是');
+                    row.classList.toggle('alert-high', item.超过上限 === '是');
+
+                } else {
+                    // 行不存在，创建新行
+                    const savedQty = localStorage.getItem(`qty_${code}`) || '';
+                    const qty = savedQty ? parseFloat(savedQty) : 0;
+                    const faceValue = (!isNaN(qty) && qty > 0) ? (qty * item.转股价 / 100).toFixed(2) : '';
+
+                    const row = document.createElement('tr');
+                    row.dataset.code = code;
+                    row.classList.toggle('alert-low', item.低于下限 === '是');
+                    row.classList.toggle('alert-high', item.超过上限 === '是');
+
+                    // --- 修改点：在HTML模板中添加建议成交时间列 ---
+                    row.innerHTML = `
+                        <td>${item.股票名称}</td>
+                        <td>${item.转债代码}</td>
+                        <td>${item.股票代码}</td>
+                        <td>${Number(item.债现价).toFixed(2)}</td>
+                        <td>${Number(item.正股价).toFixed(2)}</td>
+                        <td>${Number(item.转股价).toFixed(2)}</td>
+                        <td>${item.转股溢价率_pct}</td>
+                        <td>${(item.下限 * 100).toFixed(2)}%</td>
+                        <td>${(item.上限 * 100).toFixed(2)}%</td>
+                        <td>${item.最佳成交量.toLocaleString()}</td>
+                        <td>${item.刷新时间}</td>
+                        <td>${item.建议成交时间}</td> <!-- 建议成交时间列 -->
+                        <td class="editable-qty" data-code="${code}" contenteditable="true">${savedQty}</td>
+                        <td class="computed-face">${faceValue}</td>
+                    `;
+                    tbody.appendChild(row);
+
+                    // 缓存新行和单元格
+                    const cells = Array.from(row.querySelectorAll('td'));
+                    rowCache.set(code, { row, cells });
+
+                    // 为新行的输入框绑定事件
+                    const qtyCell = cells[12]; // 股票数量列索引变为12
+                    // qtyCell.addEventListener('focus', handleQtyFocus); // 移除输入保护
+                    qtyCell.addEventListener('blur', handleQtyBlur);
+                    qtyCell.addEventListener('input', handleQtyInput);
+                }
+            }
+        }
+
+
+        // === 警报相关函数 ===
+        function showAlert() {
+            alertBox.style.display = 'block';
+            setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
+            startTitleBlinking();
+        }
+
+        function startTitleBlinking() {
+            if (alertInterval) return;
+            let show = true;
+            alertInterval = setInterval(() => {
+                document.title = show ? `❗ 新警报！ ${originalTitle}` : originalTitle;
+                show = !show;
+            }, 1000);
+        }
+
+        function stopTitleBlinking() {
+            if (alertInterval) {
+                clearInterval(alertInterval);
+                alertInterval = null;
+                document.title = originalTitle;
+            }
+        }
+    </script>
+</body>
+</html>
