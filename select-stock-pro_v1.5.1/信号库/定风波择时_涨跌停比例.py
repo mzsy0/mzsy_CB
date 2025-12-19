@@ -1,0 +1,37 @@
+import pandas as pd
+
+from core.model.strategy_config import StrategyConfig
+
+'''
+使用案例
+'timing': {
+            'name': '定风波择时_涨跌停比例',  # 择时策略名称
+            'limit': 0,
+            'factor_list': [('次日涨跌停状态', False, '涨停', 1, '0945'),
+                            ('次日涨跌停状态', False, '跌停', 1, '0945')],
+            'params': 0.5
+        }       
+'''
+
+
+def signal(strategy: StrategyConfig, df_after_limit: pd.DataFrame):
+    """
+    选股信号
+    :param strategy: StrategyConfig, 策略配置
+    :param df_after_limit: DataFrame, 数据，包含计算所需要的因子列，包括分钟数据，已经根据股票计算范围进行了精准裁切
+    """
+    # ======================== 解析策略参数 ===========================
+    ratio = strategy.timing.params  # 从配置中解析信号参数
+    # 因为定风波只用了这样一个因子，所以我们就取用第一个。如果你有多个因子要结合的，自己从timing的对象中找出来就好了。
+    zt_col_name = strategy.timing.factor_list[0].col_name  # 选取第一个因子的名称
+    dt_col_name = strategy.timing.factor_list[1].col_name  # 选取第二个因子的名称
+
+    # ======================== 计算下跌比例 ===========================
+    zt_num = df_after_limit.groupby('交易日期')[zt_col_name].sum()
+    dt_num = df_after_limit.groupby('交易日期')[dt_col_name].sum()
+    zdt_ratio = pd.DataFrame(((zt_num) / (dt_num + zt_num + 1e-5)).rename('涨跌停比例'))
+
+    # ======================== 返回择时信号 ===========================
+    signals = zdt_ratio['涨跌停比例'].ge(ratio).astype(int)  # 返回涨停比例大于ratio的交易日，即为选股信号
+
+    return signals.to_frame(name='择时信号')
